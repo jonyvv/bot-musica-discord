@@ -324,3 +324,24 @@ async def test_composition_root_wires_inactivity_policy(monkeypatch):
     assert type(created._observer).__name__ == "InactivityPolicy"
     assert bot.registry.get(5) is created
     await bot.close()
+
+
+async def test_rejected_token_exits_with_actionable_message(monkeypatch):
+    import discord
+
+    from bot import main
+
+    monkeypatch.setenv("DISCORD_TOKEN", "malo")
+    monkeypatch.chdir("/")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/ffmpeg")
+
+    async def reject(self, token):
+        raise discord.LoginFailure("Improper token has been passed.")
+
+    monkeypatch.setattr(main.MusicBot, "start", reject)
+
+    with pytest.raises(SystemExit) as caught:
+        await main.run()
+
+    assert str(caught.value) == main.TOKEN_HINT
+    assert "malo" not in str(caught.value)

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import shutil
 
+import discord
 import httpx
 from pydantic import ValidationError
 
@@ -18,6 +19,7 @@ from bot.presentation.bot import MusicBot
 FFMPEG_HINT = (
     "FFmpeg no está instalado o no está en el PATH. En Windows: winget install Gyan.FFmpeg"
 )
+TOKEN_HINT = "Discord rechazó el token. Generá uno nuevo en el portal (Bot > Reset Token)."
 
 
 def load_settings() -> Settings:
@@ -69,7 +71,10 @@ async def run() -> None:
     async with httpx.AsyncClient(base_url=settings.resolver_url, timeout=timeout) as http:
         bot = build_bot(settings, http)
         async with bot:
-            await bot.start(settings.discord_token.get_secret_value())
+            try:
+                await bot.start(settings.discord_token.get_secret_value())
+            except discord.LoginFailure as exc:
+                raise SystemExit(TOKEN_HINT) from exc
 
 
 def main() -> None:
