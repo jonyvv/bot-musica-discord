@@ -1,0 +1,33 @@
+# Entorno y secretos
+.env
+*.env
+!.env.example
+cookies.txt
+cookies/
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Datos en runtime
+data/
+logs/
+*.log
+
+# Editores y sistema operativo
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
