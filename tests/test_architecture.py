@@ -16,7 +16,9 @@ LAYERS = set(ALLOWED_IMPORTS)
 
 def python_files():
     """Lista todos los archivos .py del repositorio fuera del entorno virtual."""
-    return [p for p in ROOT.rglob("*.py") if ".venv" not in p.parts and "node_modules" not in p.parts]
+    return [
+        p for p in ROOT.rglob("*.py") if ".venv" not in p.parts and "node_modules" not in p.parts
+    ]
 
 
 def layer_of(path: Path):

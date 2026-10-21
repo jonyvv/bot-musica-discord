@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -10,6 +11,8 @@ from yt_dlp.utils import DownloadError
 from resolver.domain.errors import TrackNotFoundError, TrackUnavailableError
 from resolver.domain.models import CollectionKind, Resolution, Source, StreamInfo, Track
 from resolver.infrastructure.ytdlp_errors import translate_error
+
+logger = logging.getLogger(__name__)
 
 AUDIO_FORMAT = "bestaudio[abr<=80]/bestaudio/best"
 _HIDDEN_TITLES = {"[Private video]", "[Deleted video]"}
@@ -110,6 +113,7 @@ class YtDlpExtractor:
         try:
             return await asyncio.to_thread(self._extract_sync, target, overrides)
         except DownloadError as exc:
+            logger.warning("yt-dlp fallo para %s: %s", target, exc)
             raise translate_error(str(exc)) from exc
 
 
