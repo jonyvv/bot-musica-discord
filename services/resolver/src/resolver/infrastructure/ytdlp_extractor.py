@@ -2,6 +2,7 @@ import asyncio
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -42,6 +43,7 @@ class YtDlpExtractor:
     def __init__(self, options: YtDlpOptions):
         """Adaptador de yt-dlp que ejecuta las extracciones bloqueantes fuera del event loop."""
         self._options = options
+        self._warned_cookies = False
 
     async def video(self, url: str) -> Track:
         """Obtiene los metadatos de un video."""
@@ -92,21 +94,44 @@ class YtDlpExtractor:
         }
         if self._options.force_ipv4:
             params["source_address"] = "0.0.0.0"
-        if self._options.cookies_file:
-            params["cookiefile"] = self._options.cookies_file
+        if cookies := self._cookies_file():
+            params["cookiefile"] = cookies
         if clients := [c.strip() for c in self._options.player_client.split(",") if c.strip()]:
             params["extractor_args"] = {"youtube": {"player_client": clients}}
         return {**params, **overrides}
 
+    def _cookies_file(self) -> str | None:
+        """Devuelve la ruta de cookies solo si el archivo existe; avisa una vez si no."""
+        path = self._options.cookies_file
+        if not path:
+            return None
+        if Path(path).is_file():
+            return path
+        if not self._warned_cookies:
+            logger.warning("El archivo de cookies %s no existe; se ignora", path)
+            self._warned_cookies = True
+        return None
+
     def _extract_sync(self, target: str, overrides: Mapping[str, Any]) -> dict:
         """Ejecuta una extracción de yt-dlp y devuelve el resultado serializable."""
-        with YoutubeDL(self._params(overrides)) as ydl:
+        ydl = YoutubeDL(self._params(overrides))
+        try:
             info = ydl.extract_info(target, download=False)
             if info is None:
                 raise TrackNotFoundError("No encontré nada para ese link.")
             if "entries" in info:
                 info["entries"] = list(info["entries"] or [])
             return ydl.sanitize_info(info)
+        finally:
+            self._close(ydl)
+
+    @staticmethod
+    def _close(ydl: YoutubeDL) -> None:
+        """Cierra yt-dlp sin que un fallo al guardar las cookies pierda el resultado ya obtenido."""
+        try:
+            ydl.close()
+        except OSError as exc:
+            logger.warning("No se pudieron guardar las cookies: %s", exc)
 
     async def _extract(self, target: str, **overrides: Any) -> dict:
         """Corre la extracción en un hilo y traduce los errores de yt-dlp a errores de dominio."""
