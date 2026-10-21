@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     ytdlp_player_client: str = ""
     ytdlp_force_ipv4: bool = True
     youtube_cookies_file: str = ""
+    ytdlp_auto_update: bool = False
+    ytdlp_update_interval_hours: int = 24
     resolver_host: str = "127.0.0.1"
     resolver_port: int = 8080
     log_level: str = "INFO"

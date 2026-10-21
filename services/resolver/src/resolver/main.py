@@ -1,4 +1,6 @@
 import logging
+import os
+import signal
 
 import httpx
 import uvicorn
@@ -7,6 +9,7 @@ from fastapi import FastAPI
 from resolver.application.service import ResolverService
 from resolver.config import Settings
 from resolver.infrastructure.spotify_embed import SpotifyEmbedCatalog
+from resolver.infrastructure.updater import YtDlpUpdater
 from resolver.infrastructure.ytdlp_extractor import YtDlpExtractor, YtDlpOptions
 from resolver.presentation.api import create_app
 
@@ -36,7 +39,18 @@ def build_app() -> FastAPI:
         )
     )
     service = ResolverService(extractor, SpotifyEmbedCatalog(http), settings.max_playlist_size)
-    return create_app(service, on_shutdown=http.aclose)
+    updater = _build_updater(settings)
+    return create_app(
+        service, on_shutdown=http.aclose, background=updater.run_forever if updater else None
+    )
+
+
+def _build_updater(settings: Settings) -> YtDlpUpdater | None:
+    """Crea el actualizador de yt-dlp si está habilitado; al actualizar apaga el proceso."""
+    if not settings.ytdlp_auto_update:
+        return None
+    interval = settings.ytdlp_update_interval_hours * 3600
+    return YtDlpUpdater(interval, on_updated=lambda: os.kill(os.getpid(), signal.SIGTERM))
 
 
 def run() -> None:
