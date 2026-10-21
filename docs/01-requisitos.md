@@ -1,8 +1,13 @@
 # Bot de música para Discord — Documento de requisitos
 
-**Versión:** 1.0 (borrador)
+**Versión:** 1.3
 **Fecha:** 2026-10-20
-**Estado:** pendiente de confirmar los supuestos de la sección 2
+**Estado:** implementado; algunas secciones fueron superadas durante la construcción
+
+> **Leer primero:** este documento se escribió *antes* de construir el bot. Qué cambió o quedó fuera
+> está en la tabla "Cambios respecto de los requisitos" de [02-arquitectura.md](02-arquitectura.md).
+> Los cambios más importantes son: la arquitectura pasó de un proceso a dos microservicios (§8), y Spotify
+> se lee desde sus páginas embed en vez de la Web API (§5.3, §6.1).
 
 ---
 
