@@ -15,6 +15,10 @@ class SessionRegistry:
         """Devuelve la sesión del servidor si existe."""
         return self._sessions.get(guild_id)
 
+    def sessions(self) -> list[GuildSession]:
+        """Lista las sesiones activas; es una copia, así que se puede cerrar mientras se recorre."""
+        return list(self._sessions.values())
+
     def get_or_create(self, guild_id: int) -> GuildSession:
         """Devuelve la sesión del servidor, creándola si todavía no existe."""
         session = self._sessions.get(guild_id)
