@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -62,14 +63,19 @@ def handle_resolver_error(_: Request, exc: ResolverError) -> JSONResponse:
 
 
 def create_app(
-    service: ResolverService, on_shutdown: Callable[[], Awaitable[None]] | None = None
+    service: ResolverService,
+    on_shutdown: Callable[[], Awaitable[None]] | None = None,
+    background: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
     """Construye la aplicación HTTP con sus rutas, su manejo de errores y su ciclo de vida."""
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        """Cierra los recursos externos cuando el servicio se apaga."""
+        """Corre la tarea de fondo mientras el servicio vive y cierra los recursos al apagarlo."""
+        task = asyncio.create_task(background()) if background else None
         yield
+        if task:
+            task.cancel()
         if on_shutdown:
             await on_shutdown()
 
