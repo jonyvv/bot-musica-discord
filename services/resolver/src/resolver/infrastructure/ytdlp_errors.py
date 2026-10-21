@@ -21,7 +21,6 @@ _UNAVAILABLE_MARKERS = (
     "copyright",
     "premiere",
 )
-_MAX_DETAIL = 200
 
 
 def translate_error(message: str) -> ResolverError:
@@ -38,4 +37,4 @@ def translate_error(message: str) -> ResolverError:
         return TrackUnavailableError(
             "Ese video no está disponible (privado, restringido o borrado)."
         )
-    return UpstreamError(f"Error al consultar YouTube: {message[:_MAX_DETAIL]}")
+    return UpstreamError("YouTube devolvió un error inesperado. Probá de nuevo en un rato.")

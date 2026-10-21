@@ -31,10 +31,11 @@ def test_translate_error(message, expected):
     assert isinstance(translate_error(message), expected)
 
 
-def test_translate_error_truncates_unknown_details():
-    error = translate_error("x" * 1000)
+def test_translate_error_never_leaks_raw_details_to_users():
+    error = translate_error("ERROR: cookies file not found: /data/cookies/secret-account.txt")
 
-    assert len(error.message) < 300
+    assert "secret-account" not in error.message
+    assert "/data" not in error.message
 
 
 def test_to_track_builds_url_from_id_when_missing():
