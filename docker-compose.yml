@@ -1,0 +1,36 @@
+services:
+  resolver:
+    build: ./services/resolver
+    restart: unless-stopped
+    environment:
+      RESOLVER_HOST: 0.0.0.0
+      YTDLP_JS_RUNTIME: deno
+      YTDLP_AUTO_UPDATE: "true"
+      YOUTUBE_COOKIES_FILE: /data/cookies/cookies.txt
+      MAX_PLAYLIST_SIZE: ${MAX_PLAYLIST_SIZE:-500}
+      YTDLP_PLAYER_CLIENT: ${YTDLP_PLAYER_CLIENT:-}
+      YTDLP_FORCE_IPV4: ${YTDLP_FORCE_IPV4:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data/cookies:/data/cookies
+    expose:
+      - "8080"
+    mem_limit: 512m
+
+  bot:
+    build: ./services/bot
+    restart: unless-stopped
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?Falta DISCORD_TOKEN en el archivo .env}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      RESOLVER_URL: http://resolver:8080
+      IDLE_TIMEOUT: ${IDLE_TIMEOUT:-300}
+      EMPTY_TIMEOUT: ${EMPTY_TIMEOUT:-120}
+      PAUSE_TIMEOUT: ${PAUSE_TIMEOUT:-600}
+      DEFAULT_VOLUME: ${DEFAULT_VOLUME:-50}
+      MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-1000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      resolver:
+        condition: service_healthy
+    mem_limit: 384m
