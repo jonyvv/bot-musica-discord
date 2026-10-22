@@ -1,13 +1,18 @@
 import asyncio
 import logging
+import math
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from resolver.application.service import ResolverService
-from resolver.domain.errors import BotDetectedError, ResolverError
+from resolver.domain.errors import BotDetectedError, RateLimitedError, ResolverError
+from resolver.presentation.auth import verify_api_key
+from resolver.presentation.body_limit import BodySizeLimitMiddleware
+from resolver.presentation.inflight_limit import InflightLimitMiddleware
 from resolver.presentation.schemas import (
     ErrorSchema,
     ResolutionSchema,
@@ -15,10 +20,13 @@ from resolver.presentation.schemas import (
     StreamSchema,
     TrackSchema,
 )
+from resolver.presentation.security import SecurityPolicy, SlidingWindowLimiter, throttle_requests
 
 logger = logging.getLogger(__name__)
 
 _STATUS_BY_CODE = {
+    "rate_limited": 429,
+    "unauthorized": 401,
     "unsupported_input": 422,
     "not_found": 404,
     "unavailable": 404,
@@ -28,7 +36,11 @@ _STATUS_BY_CODE = {
 }
 _ERRORS = {code: {"model": ErrorSchema} for code in set(_STATUS_BY_CODE.values())}
 
-router = APIRouter(prefix="/v1", responses=_ERRORS)
+router = APIRouter(
+    prefix="/v1",
+    responses=_ERRORS,
+    dependencies=[Depends(throttle_requests), Depends(verify_api_key)],
+)
 
 
 def get_service(request: Request) -> ResolverService:
@@ -54,18 +66,33 @@ async def stream(
 
 def handle_resolver_error(_: Request, exc: ResolverError) -> JSONResponse:
     """Traduce un error de dominio a una respuesta JSON con código estable."""
-    if isinstance(exc, BotDetectedError):
+    headers = {}
+    if isinstance(exc, RateLimitedError):
+        logger.debug("rate_limited message=%s", exc.message)
+        headers["Retry-After"] = str(math.ceil(exc.retry_after))
+    elif isinstance(exc, BotDetectedError):
         logger.error("DETECCION DE BOT: YouTube pidio verificacion. %s", exc.message)
     else:
         logger.warning("resolver_error code=%s message=%s", exc.code, exc.message)
     status = _STATUS_BY_CODE.get(exc.code, 502)
-    return JSONResponse(status_code=status, content={"code": exc.code, "message": exc.message})
+    content = {"code": exc.code, "message": exc.message}
+    return JSONResponse(status_code=status, content=content, headers=headers)
+
+
+def handle_validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+    """Responde 422 con los campos que fallaron, sin repetir nunca lo que mandó el cliente."""
+    fields = sorted(
+        {".".join(str(part) for part in error["loc"][1:]) or "cuerpo" for error in exc.errors()}
+    )
+    content = {"code": "invalid_request", "message": "Pedido inválido.", "fields": fields}
+    return JSONResponse(status_code=422, content=content)
 
 
 def create_app(
     service: ResolverService,
     on_shutdown: Callable[[], Awaitable[None]] | None = None,
     background: Callable[[], Awaitable[None]] | None = None,
+    security: SecurityPolicy | None = None,
 ) -> FastAPI:
     """Construye la aplicación HTTP con sus rutas, su manejo de errores y su ciclo de vida."""
 
@@ -79,10 +106,27 @@ def create_app(
         if on_shutdown:
             await on_shutdown()
 
-    app = FastAPI(title="Resolver", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(
+        title="Resolver", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
+    )
+    policy = security or SecurityPolicy()
     app.state.service = service
+    app.state.api_key_sha256 = policy.api_key_sha256
+    app.state.request_limiter = (
+        SlidingWindowLimiter(policy.requests_per_minute, 60) if policy.requests_per_minute else None
+    )
+    app.state.auth_failures = SlidingWindowLimiter(
+        policy.auth_failure_limit, policy.auth_failure_window_seconds
+    )
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=policy.max_body_bytes,
+        body_timeout=policy.body_timeout_seconds,
+    )
+    app.add_middleware(InflightLimitMiddleware, per_client=policy.max_client_concurrency)
     app.include_router(router)
     app.add_exception_handler(ResolverError, handle_resolver_error)
+    app.add_exception_handler(RequestValidationError, handle_validation_error)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

@@ -16,9 +16,10 @@ convention = "pep257"
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["D"]
 "tests/**" = ["D"]
+"scripts/attack_resolver.py" = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests", "services"]
-pythonpath = ["services/bot/src", "services/resolver/src"]
+pythonpath = ["services/bot/src", "services/resolver/src", "scripts"]
 addopts = "--import-mode=importlib -q"

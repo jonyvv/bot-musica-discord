@@ -5,6 +5,7 @@ import httpx
 
 from bot.domain.errors import ResolverError, ResolverUnavailableError
 from bot.domain.models import CollectionKind, Resolution, Source, StreamInfo, Track
+from bot.domain.text import clean_text, safe_url
 
 _GENERIC_ERROR = "El servicio de música respondió con un error."
 
@@ -52,15 +53,16 @@ class HttpTrackResolver:
 
 def _to_track(item: dict[str, Any]) -> Track:
     """Convierte un elemento de la respuesta en una canción del dominio."""
+    duration = item.get("duration_seconds")
     return Track(
-        title=item["title"],
-        artist=item.get("artist"),
-        duration_seconds=item.get("duration_seconds"),
+        title=clean_text(item["title"]) or "Sin título",
+        artist=clean_text(item.get("artist"), 100),
+        duration_seconds=duration if isinstance(duration, int) and duration >= 0 else None,
         source=Source(item["source"]),
-        webpage_url=item.get("webpage_url"),
-        search_query=item.get("search_query"),
-        thumbnail_url=item.get("thumbnail_url"),
-        is_live=item.get("is_live", False),
+        webpage_url=safe_url(item.get("webpage_url")),
+        search_query=clean_text(item.get("search_query"), 300),
+        thumbnail_url=safe_url(item.get("thumbnail_url")),
+        is_live=bool(item.get("is_live", False)),
     )
 
 

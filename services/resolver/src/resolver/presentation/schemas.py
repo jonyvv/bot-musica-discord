@@ -1,23 +1,39 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from resolver.domain.models import CollectionKind, Resolution, Source, StreamInfo, Track
+
+
+def encodable(value: str | None) -> str | None:
+    """Rechaza textos con caracteres Unicode inválidos que no se pueden codificar en UTF-8."""
+    if value is not None:
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ValueError("contiene caracteres inválidos") from exc
+    return value
 
 
 class ResolveRequest(BaseModel):
     query: str = Field(min_length=1, max_length=500)
 
+    _valid_text = field_validator("query")(encodable)
+
 
 class TrackSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    title: str
-    artist: str | None = None
-    duration_seconds: int | None = None
+    title: str = Field(max_length=1000)
+    artist: str | None = Field(default=None, max_length=1000)
+    duration_seconds: int | None = Field(default=None, ge=0, le=172_800)
     source: Source
-    webpage_url: str | None = None
-    search_query: str | None = None
-    thumbnail_url: str | None = None
+    webpage_url: str | None = Field(default=None, max_length=2048)
+    search_query: str | None = Field(default=None, max_length=1200)
+    thumbnail_url: str | None = Field(default=None, max_length=2048)
     is_live: bool = False
+
+    _valid_text = field_validator(
+        "title", "artist", "webpage_url", "search_query", "thumbnail_url"
+    )(encodable)
 
     def to_domain(self) -> Track:
         """Convierte el esquema recibido en una canción del dominio."""

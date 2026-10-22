@@ -109,7 +109,9 @@ class RecordingObserver:
 
 @pytest.fixture
 def make_track():
-    def factory(title="Song", duration=200, url="https://www.youtube.com/watch?v=abc", **extra):
+    def factory(
+        title="Song", duration=200, url="https://www.youtube.com/watch?v=abcdefghijk", **extra
+    ):
         return Track(
             title=title,
             artist=extra.pop("artist", "Artist"),

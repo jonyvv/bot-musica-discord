@@ -29,3 +29,16 @@ class SpotifyUnavailableError(ResolverError):
 
 class UpstreamError(ResolverError):
     code = "upstream_error"
+
+
+class UnauthorizedError(ResolverError):
+    code = "unauthorized"
+
+
+class RateLimitedError(ResolverError):
+    code = "rate_limited"
+
+    def __init__(self, message: str, retry_after: float = 1.0):
+        """Crea el error de exceso de pedidos junto con los segundos que conviene esperar."""
+        super().__init__(message)
+        self.retry_after = retry_after

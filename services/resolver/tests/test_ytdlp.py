@@ -40,9 +40,9 @@ def test_translate_error_never_leaks_raw_details_to_users():
 
 
 def test_to_track_builds_url_from_id_when_missing():
-    track = _to_track({"id": "abc", "title": "T", "duration": 61.7, "uploader": "Chan"})
+    track = _to_track({"id": "abcdefghijk", "title": "T", "duration": 61.7, "uploader": "Chan"})
 
-    assert track.webpage_url == "https://www.youtube.com/watch?v=abc"
+    assert track.webpage_url == "https://www.youtube.com/watch?v=abcdefghijk"
     assert track.duration_seconds == 61
     assert track.artist == "Chan"
 

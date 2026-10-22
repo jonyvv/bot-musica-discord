@@ -7,7 +7,7 @@ from discord.ext import commands
 from bot.application.ports import FinishedCallback
 from bot.domain.errors import VoiceError
 from bot.domain.models import StreamInfo
-from bot.infrastructure.ffmpeg import OUTPUT_OPTIONS, before_options
+from bot.infrastructure.ffmpeg import OUTPUT_OPTIONS, before_options, is_remote_url
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,9 @@ class DiscordVoiceGateway:
         client = self._client
         if client is None or not client.is_connected():
             raise VoiceError("No estoy conectado a un canal de voz.")
+        if not is_remote_url(stream.url):
+            logger.warning("Se rechazó una URL de audio que no es http(s)")
+            raise VoiceError("El servicio de música devolvió un audio inválido.")
         loop = asyncio.get_running_loop()
 
         def after(error: Exception | None) -> None:

@@ -55,14 +55,14 @@ def service(extractor, make_track):
 
 
 async def test_resolves_youtube_video_to_single_track(service):
-    result = await service.resolve("https://youtu.be/abc")
+    result = await service.resolve("https://youtu.be/abcdefghijk")
 
     assert result.kind == CollectionKind.TRACK
     assert [t.title for t in result.tracks] == ["Video"]
 
 
 async def test_youtube_playlist_uses_configured_limit(service):
-    result = await service.resolve("https://www.youtube.com/playlist?list=PL1")
+    result = await service.resolve("https://www.youtube.com/playlist?list=PLabcdefghij")
 
     assert len(result.tracks) == 3
     assert result.truncated
@@ -103,16 +103,16 @@ async def test_unsupported_link_fails(service):
 
 
 async def test_stream_of_track_with_url_skips_search(service, extractor, make_track):
-    stream = await service.stream(make_track(url="direct"))
+    stream = await service.stream(make_track(url="https://www.youtube.com/watch?v=abcdefghijk"))
 
-    assert stream.url == "audio:direct"
+    assert stream.url == "audio:https://www.youtube.com/watch?v=abcdefghijk"
     assert extractor.searched == []
 
 
 async def test_stream_of_spotify_track_matches_by_duration(service, extractor, make_track):
     extractor.search_results = [
-        make_track("Song", 400, url="too-long"),
-        make_track("Song", 181, url="match"),
+        make_track("Song", 400, url="https://www.youtube.com/watch?v=toolongxxxx"),
+        make_track("Song", 181, url="https://www.youtube.com/watch?v=matchxxxxxx"),
     ]
     spotify_track = make_track(
         "Song", 180, url=None, source=Source.SPOTIFY, search_query="A - Song"
@@ -121,7 +121,7 @@ async def test_stream_of_spotify_track_matches_by_duration(service, extractor, m
     stream = await service.stream(spotify_track)
 
     assert extractor.searched == ["A - Song"]
-    assert stream.webpage_url == "match"
+    assert stream.webpage_url == "https://www.youtube.com/watch?v=matchxxxxxx"
 
 
 async def test_stream_of_spotify_track_without_match_fails(service, make_track):

@@ -5,6 +5,7 @@ from discord.ext import commands
 from bot.application.registry import SessionRegistry
 from bot.application.session import MAX_VOLUME
 from bot.presentation.embeds import enqueued_embed, now_playing_embed
+from bot.presentation.formatting import safe
 from bot.presentation.guards import controlled_session, existing_session, play_target
 
 
@@ -32,7 +33,7 @@ class PlaybackCog(commands.Cog):
     async def skip(self, interaction: discord.Interaction) -> None:
         """Corta la canción actual y pasa a la siguiente."""
         skipped = await controlled_session(interaction, self._registry).skip()
-        await interaction.response.send_message(f"⏭️ Salté **{skipped.title}**.")
+        await interaction.response.send_message(f"⏭️ Salté **{safe(skipped.title)}**.")
 
     @app_commands.command(name="pause", description="Pausa la reproducción")
     @app_commands.guild_only()

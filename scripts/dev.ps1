@@ -1,6 +1,8 @@
 param(
-    [ValidateSet("setup", "resolver", "bot", "test", "lint")]
-    [string]$Task = "setup"
+    [ValidateSet("setup", "resolver", "bot", "test", "lint", "token", "keygen", "audit")]
+    [string]$Task = "setup",
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Extra
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,8 +23,9 @@ switch ($Task) {
         & $python -m pip install -r requirements-dev.txt
         if (-not (Test-Path ".env")) {
             Copy-Item ".env.example" ".env"
-            Write-Host "Se creo .env: completa DISCORD_TOKEN antes de iniciar el bot."
+            Write-Host "Se creo .env (sin secretos)."
         }
+        Write-Host "Siguiente: .\scripts\dev.ps1 token   y   .\scripts\dev.ps1 keygen"
         if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
             Write-Warning "FFmpeg no esta en el PATH. Instalalo con: winget install Gyan.FFmpeg"
         }
@@ -36,6 +39,20 @@ switch ($Task) {
         Assert-Venv
         $env:PYTHONPATH = "services/bot/src"
         & $python -m bot.main
+    }
+    "token" {
+        Assert-Venv
+        $env:PYTHONPATH = "services/bot/src;scripts"
+        & $python scripts/store_secret.py DISCORD_TOKEN @Extra
+    }
+    "keygen" {
+        Assert-Venv
+        $env:PYTHONPATH = "services/bot/src;services/resolver/src;scripts"
+        & $python scripts/gen_api_key.py @Extra
+    }
+    "audit" {
+        Assert-Venv
+        & $python -m pip_audit --skip-editable
     }
     "test" {
         Assert-Venv

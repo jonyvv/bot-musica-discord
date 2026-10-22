@@ -6,6 +6,21 @@ cookies.txt
 cookies/
 secrets/
 
+# Claves privadas y credenciales de nube
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.ppk
+.oci/
+.ssh/
+*.tfstate
+*.tfstate.*
+credentials.json
+service-account*.json
+
 # Python
 __pycache__/
 *.py[cod]
