@@ -77,6 +77,11 @@ ejecutó contra el código o contra contenedores reales de Docker.
 | **Escape del contenedor** | Sin root, sin capacidades, `no-new-privileges`, bot de solo lectura, límites de memoria y procesos, sin montar el socket de Docker |
 | **Secretos en la imagen** | `.dockerignore`, contexto por servicio y escaneo de secretos de Trivy |
 
+**Excepciones del escaneo de imágenes.** Trivy marca 4 hallazgos HIGH en copias vendorizadas dentro de
+pip (msgpack, setuptools y urllib3 de `pip/_vendor`). No son dependencias del servicio (el resolver usa
+urllib3 2.8.0) y solo se cargarían al actualizar `yt-dlp` desde PyPI. Están listadas por ID, con su
+motivo, en `.trivyignore`; cualquier otro hallazgo sigue haciendo fallar el CI.
+
 ## Qué encontraron las pruebas (y se corrigió)
 
 Estas pruebas son las que encontraron problemas reales; ninguno se habría visto leyendo el código:
