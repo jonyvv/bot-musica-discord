@@ -23,20 +23,24 @@ class Intent:
 
 _YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
 _SHORT_HOST = "youtu.be"
-_VIDEO_PATHS = ("/shorts/", "/live/", "/embed/")
+_VIDEO_SEGMENTS = {"shorts", "live", "embed"}
+_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_PLAYLIST_ID = re.compile(r"^[A-Za-z0-9_-]{10,64}$")
 _SPOTIFY_HOSTS = {"open.spotify.com"}
-_SPOTIFY_URI = re.compile(r"^spotify:(track|album|playlist):([A-Za-z0-9]+)$")
-_SPOTIFY_PATH = re.compile(r"^/(?:intl-[a-z-]+/)?(track|album|playlist)/([A-Za-z0-9]+)")
+_SPOTIFY_URI = re.compile(r"^spotify:(track|album|playlist):([A-Za-z0-9]{1,64})$")
+_SPOTIFY_PATH = re.compile(r"^/(?:intl-[a-z-]+/)?(track|album|playlist)/([A-Za-z0-9]{1,64})/?$")
 _SPOTIFY_KINDS = {
     "track": InputKind.SPOTIFY_TRACK,
     "album": InputKind.SPOTIFY_ALBUM,
     "playlist": InputKind.SPOTIFY_PLAYLIST,
 }
+_VIDEO_URL = "https://www.youtube.com/watch?v={}"
+_PLAYLIST_URL = "https://www.youtube.com/playlist?list={}"
 _UNSUPPORTED = "Solo puedo reproducir links de YouTube y Spotify, o buscar una canción por nombre."
 
 
 def classify(text: str) -> Intent:
-    """Determina qué tipo de entrada es el texto y qué referencia hay que resolver."""
+    """Determina qué tipo de entrada es el texto y devuelve una referencia reconstruida y segura."""
     text = text.strip()
     if not text:
         raise UnsupportedInputError("Escribí una URL o el nombre de una canción.")
@@ -44,13 +48,33 @@ def classify(text: str) -> Intent:
         return Intent(_SPOTIFY_KINDS[match[1]], match[2])
     if not text.lower().startswith(("http://", "https://")):
         return Intent(InputKind.SEARCH, text)
-    url = urlparse(text)
+    url = _parse(text)
     host = (url.hostname or "").lower()
     if host in _SPOTIFY_HOSTS:
         return _classify_spotify(url)
     if host in _YOUTUBE_HOSTS or host == _SHORT_HOST:
-        return _classify_youtube(url, host, text)
+        return _classify_youtube(url, host)
     raise UnsupportedInputError(_UNSUPPORTED)
+
+
+def _parse(text: str) -> ParseResult:
+    """Interpreta la URL y rechaza las que traen usuario, contraseña, puerto o formato inválido."""
+    try:
+        url = urlparse(text)
+        has_authority = bool(url.username or url.password or url.port)
+    except ValueError as exc:
+        raise UnsupportedInputError(_UNSUPPORTED) from exc
+    if has_authority:
+        raise UnsupportedInputError(_UNSUPPORTED)
+    return url
+
+
+def ensure_youtube_video(url: str) -> str:
+    """Exige un video de YouTube y devuelve su URL canónica, nunca el texto recibido."""
+    intent = classify(url)
+    if intent.kind is not InputKind.YOUTUBE_VIDEO:
+        raise UnsupportedInputError("Solo puedo reproducir videos de YouTube.")
+    return intent.ref
 
 
 def _classify_spotify(url: ParseResult) -> Intent:
@@ -60,15 +84,27 @@ def _classify_spotify(url: ParseResult) -> Intent:
     raise UnsupportedInputError("Ese link de Spotify no es de una canción, álbum o playlist.")
 
 
-def _classify_youtube(url: ParseResult, host: str, original: str) -> Intent:
-    """Clasifica un link de YouTube; un video dentro de una playlist cuenta solo como video."""
+def _classify_youtube(url: ParseResult, host: str) -> Intent:
+    """Clasifica un link de YouTube y lo reconstruye a partir de su ID, sin reutilizar el texto."""
     params = parse_qs(url.query)
-    if url.path.rstrip("/") == "/playlist" and params.get("list"):
-        return Intent(
-            InputKind.YOUTUBE_PLAYLIST,
-            f"https://www.youtube.com/playlist?list={params['list'][0]}",
-        )
-    is_short_link = host == _SHORT_HOST and bool(url.path.strip("/"))
-    if is_short_link or "v" in params or url.path.startswith(_VIDEO_PATHS):
-        return Intent(InputKind.YOUTUBE_VIDEO, original)
-    raise UnsupportedInputError(_UNSUPPORTED)
+    segments = [part for part in url.path.split("/") if part]
+    if host == _SHORT_HOST:
+        video_id = segments[0] if len(segments) == 1 else ""
+    elif segments == ["watch"]:
+        video_id = (params.get("v") or [""])[0]
+    elif len(segments) == 2 and segments[0] in _VIDEO_SEGMENTS:
+        video_id = segments[1]
+    elif segments == ["playlist"]:
+        return _youtube_playlist((params.get("list") or [""])[0])
+    else:
+        raise UnsupportedInputError(_UNSUPPORTED)
+    if not _VIDEO_ID.match(video_id):
+        raise UnsupportedInputError(_UNSUPPORTED)
+    return Intent(InputKind.YOUTUBE_VIDEO, _VIDEO_URL.format(video_id))
+
+
+def _youtube_playlist(playlist_id: str) -> Intent:
+    """Arma la referencia de una playlist de YouTube a partir de su ID validado."""
+    if not _PLAYLIST_ID.match(playlist_id):
+        raise UnsupportedInputError(_UNSUPPORTED)
+    return Intent(InputKind.YOUTUBE_PLAYLIST, _PLAYLIST_URL.format(playlist_id))

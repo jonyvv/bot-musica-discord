@@ -20,5 +20,5 @@ convention = "pep257"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests", "services"]
-pythonpath = ["services/bot/src", "services/resolver/src"]
+pythonpath = ["services/bot/src", "services/resolver/src", "scripts"]
 addopts = "--import-mode=importlib -q"

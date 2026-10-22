@@ -60,7 +60,7 @@ def test_stream_returns_url_and_headers(client):
     track = {
         "title": "Song",
         "source": "youtube",
-        "webpage_url": "https://www.youtube.com/watch?v=a",
+        "webpage_url": "https://www.youtube.com/watch?v=abcdefghijk",
     }
 
     body = client.post("/v1/stream", json=track).json()

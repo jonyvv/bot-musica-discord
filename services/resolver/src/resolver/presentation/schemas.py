@@ -10,13 +10,13 @@ class ResolveRequest(BaseModel):
 class TrackSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    title: str
-    artist: str | None = None
-    duration_seconds: int | None = None
+    title: str = Field(max_length=1000)
+    artist: str | None = Field(default=None, max_length=1000)
+    duration_seconds: int | None = Field(default=None, ge=0, le=172_800)
     source: Source
-    webpage_url: str | None = None
-    search_query: str | None = None
-    thumbnail_url: str | None = None
+    webpage_url: str | None = Field(default=None, max_length=2048)
+    search_query: str | None = Field(default=None, max_length=1200)
+    thumbnail_url: str | None = Field(default=None, max_length=2048)
     is_live: bool = False
 
     def to_domain(self) -> Track:

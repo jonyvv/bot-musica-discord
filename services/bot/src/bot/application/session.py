@@ -10,6 +10,7 @@ from bot.application.ports import Notifier, TrackResolver, VoiceGateway
 from bot.domain.errors import BotError, InvalidRequestError, NotPlayingError, VoiceError
 from bot.domain.models import LoopMode, Resolution, Track
 from bot.domain.queue import TrackQueue
+from bot.domain.text import escape_markup
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,8 @@ class PlaybackState(StrEnum):
 class SessionSettings:
     default_volume: int = 50
     max_queue_size: int = 1000
+    max_tracks_per_user: int = 200
+    max_inflight: int = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +55,8 @@ class GuildSession:
         self.loop_mode = LoopMode.OFF
         self.volume = settings.default_volume
         self.state = PlaybackState.IDLE
+        self._settings = settings
+        self._inflight = 0
         self._resolver = resolver
         self._voice = voice
         self._notifier = notifier
@@ -78,12 +83,13 @@ class GuildSession:
 
     async def enqueue(self, query: str, requester_id: int, channel_id: int) -> EnqueueResult:
         """Resuelve el pedido, se conecta y lo encola, arrancando si no había nada sonando."""
-        resolution = await self._resolver.resolve(query)
+        resolution = await self._resolve_limited(query)
         tracks = [replace(track, requester_id=requester_id) for track in resolution.tracks]
         self._ensure_open()
         await self._ensure_connected(channel_id)
         async with self._lock:
             self._ensure_open()
+            tracks = tracks[: self._quota_left(requester_id)]
             idle = self.queue.current is None
             position = 0 if idle else len(self.queue) + 1
             added = self.queue.add(tracks)
@@ -160,6 +166,29 @@ class GuildSession:
         if self._on_closed:
             self._on_closed(self.guild_id)
 
+    async def _resolve_limited(self, query: str) -> Resolution:
+        """Resuelve el pedido limitando cuántas resoluciones simultáneas puede tener el servidor."""
+        if self._inflight >= self._settings.max_inflight:
+            raise InvalidRequestError("Hay demasiados pedidos en proceso. Esperá un momento.")
+        self._inflight += 1
+        try:
+            return await self._resolver.resolve(query)
+        finally:
+            self._inflight -= 1
+
+    def _quota_left(self, requester_id: int) -> int:
+        """Cuántas canciones más puede agregar ese usuario; falla si ya llegó a su tope."""
+        limit = self._settings.max_tracks_per_user
+        if limit <= 0:
+            return self._settings.max_queue_size
+        queued = [self.queue.current, *self.queue.pending]
+        used = sum(1 for track in queued if track and track.requester_id == requester_id)
+        if used >= limit:
+            raise InvalidRequestError(
+                f"Ya tenés {used} canciones en la cola (el máximo es {limit})."
+            )
+        return limit - used
+
     def _ensure_open(self) -> None:
         """Falla si la sesión ya fue cerrada mientras se esperaba una operación."""
         if self._closed:
@@ -199,7 +228,8 @@ class GuildSession:
                 return False
             await self._voice.play(stream, self.volume, on_finished)
         except BotError as exc:
-            await self._notifier.send(f"No pude reproducir **{track.title}**: {exc.user_message}")
+            title = escape_markup(track.title)
+            await self._notifier.send(f"No pude reproducir **{title}**: {exc.user_message}")
             return False
         self.state = PlaybackState.PLAYING
         self._clock.start()

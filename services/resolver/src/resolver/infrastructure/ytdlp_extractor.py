@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,7 @@ from yt_dlp.utils import DownloadError
 
 from resolver.domain.errors import TrackNotFoundError, TrackUnavailableError
 from resolver.domain.models import CollectionKind, Resolution, Source, StreamInfo, Track
+from resolver.domain.policy import exceeds_limits
 from resolver.infrastructure.ytdlp_errors import translate_error
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ class YtDlpOptions:
     player_client: str = ""
     force_ipv4: bool = True
     cookies_file: str = ""
+    max_track_seconds: int = 10_800
 
 
 class YtDlpExtractor:
@@ -44,6 +47,7 @@ class YtDlpExtractor:
         """Adaptador de yt-dlp que ejecuta las extracciones bloqueantes fuera del event loop."""
         self._options = options
         self._warned_cookies = False
+        self._warned_perms = False
 
     async def video(self, url: str) -> Track:
         """Obtiene los metadatos de un video."""
@@ -71,6 +75,11 @@ class YtDlpExtractor:
     async def stream(self, url: str) -> StreamInfo:
         """Obtiene la URL de audio reproducible de un video, con los headers que exige."""
         info = await self._extract(url, format=AUDIO_FORMAT)
+        live = bool(info.get("is_live")) or info.get("live_status") == "is_live"
+        if exceeds_limits(_as_int(info.get("duration")), live, self._options.max_track_seconds):
+            raise TrackUnavailableError(
+                "Ese video es demasiado largo o es una transmisión en vivo."
+            )
         stream_url = info.get("url")
         if not stream_url:
             raise TrackUnavailableError("No encontré un formato de audio reproducible.")
@@ -106,11 +115,19 @@ class YtDlpExtractor:
         if not path:
             return None
         if Path(path).is_file():
+            self._warn_if_shared(path)
             return path
         if not self._warned_cookies:
             logger.warning("El archivo de cookies %s no existe; se ignora", path)
             self._warned_cookies = True
         return None
+
+    def _warn_if_shared(self, path: str) -> None:
+        """Avisa una vez si otros usuarios del sistema pueden leer el archivo de cookies."""
+        if self._warned_perms or os.name != "posix" or not is_shared(Path(path).stat().st_mode):
+            return
+        logger.warning("El archivo de cookies es legible por otros usuarios: ejecutá chmod 600")
+        self._warned_perms = True
 
     def _extract_sync(self, target: str, overrides: Mapping[str, Any]) -> dict:
         """Ejecuta una extracción de yt-dlp y devuelve el resultado serializable."""
@@ -140,6 +157,11 @@ class YtDlpExtractor:
         except DownloadError as exc:
             logger.warning("yt-dlp fallo para %s: %s", target, exc)
             raise translate_error(str(exc)) from exc
+
+
+def is_shared(mode: int) -> bool:
+    """Indica si los permisos de un archivo dan acceso al grupo o a otros usuarios."""
+    return bool(mode & 0o077)
 
 
 def _as_int(value: Any) -> int | None:

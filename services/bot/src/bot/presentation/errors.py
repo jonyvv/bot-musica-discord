@@ -19,6 +19,8 @@ def describe(error: app_commands.AppCommandError) -> str:
         return f"Esperá {error.retry_after:.0f} s antes de volver a usar este comando."
     if isinstance(error, app_commands.NoPrivateMessage):
         return "Este comando solo funciona dentro de un servidor."
+    if isinstance(error, app_commands.CheckFailure):
+        return "Este bot no está habilitado en este servidor."
     logger.error("Error inesperado en un comando", exc_info=original)
     return _UNEXPECTED
 

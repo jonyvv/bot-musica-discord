@@ -6,7 +6,7 @@ from resolver.domain.errors import (
     UpstreamError,
 )
 
-_BOT_MARKERS = ("not a bot",)
+_BOT_MARKERS = ("not a bot", "http error 429", "too many requests")
 _UNAVAILABLE_MARKERS = (
     "video unavailable",
     "is unavailable",

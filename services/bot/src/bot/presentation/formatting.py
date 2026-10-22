@@ -1,4 +1,4 @@
-import discord
+from bot.domain.text import escape_markup
 
 _BAR_WIDTH = 18
 
@@ -30,4 +30,4 @@ def truncate(text: str, limit: int) -> str:
 
 def safe(text: str, limit: int = 70) -> str:
     """Prepara un texto externo para mostrarlo: lo recorta y neutraliza el formato de Discord."""
-    return discord.utils.escape_markdown(truncate(text, limit))
+    return escape_markup(truncate(text, limit))

@@ -1,4 +1,6 @@
-discord.py[voice]==2.7.1
+discord.py==2.7.1
+PyNaCl==1.6.2
 audioop-lts==0.2.2; python_version >= "3.13"
+keyring==25.7.0; sys_platform == "win32"
 httpx==0.28.1
 pydantic-settings==2.16.1
