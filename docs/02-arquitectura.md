@@ -115,5 +115,11 @@ fuera, para que no haya que adivinarlo:
 | Anti-bot | Proveedor de PO token | No implementado | La investigación mostró que ya no alcanza (§9.3) |
 | P2 sin hacer | RF-08, 17, 40, 41, 42, 44, 49b, 56, 70 | No implementados | Escenario Stage, menú de resultados, `/move`, `/jump`, `/playnext`, pre-resolución, `/seek`, config por servidor, botones |
 
-**Limitación sin verificar:** las páginas embed de Spotify devolvieron 50 canciones en la
-playlist editorial probada. No se comprobó el tope para playlists más largas.
+**Límites medidos de las páginas embed de Spotify** (octubre de 2026):
+
+- Devuelven **como máximo 100 canciones** por lista. Tres playlists editoriales de más de 100
+  devolvieron exactamente 100, y la página no incluye el total, así que no se puede saber
+  cuántas faltan. Al llegar a 100 la respuesta se marca como posiblemente incompleta.
+- Solo leen contenido **público**. Una playlist privada o inexistente responde HTTP 200 con
+  `status: 404` *dentro* de la página (no un 404 HTTP), y así se detecta.
+- "Canciones que te gustan" no se puede compartir por link, así que no es accesible.

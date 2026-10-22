@@ -67,6 +67,8 @@ ningún archivo supera las 500 líneas y cada capa solo depende de las internas.
   es la prueba de integración pendiente.
 - Las imágenes de Docker **no se construyeron** durante el desarrollo (no había motor de
   Docker disponible); solo se validó la sintaxis del compose.
+- Las playlists de Spotify tienen que ser **públicas** y se leen hasta **100 canciones**
+  (límite medido; el bot avisa si puede faltar alguna). Ver [docs/03-setup.md](docs/03-setup.md).
 - Spotify no entrega audio: cada canción se busca en YouTube al reproducir, así que puede
   sonar una versión distinta. Ver [docs/01-requisitos.md](docs/01-requisitos.md), sección 6.1,
   por las implicancias de términos de servicio.

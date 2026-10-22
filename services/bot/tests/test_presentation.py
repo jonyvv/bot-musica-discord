@@ -228,7 +228,7 @@ async def test_enqueued_embed_for_collection_reports_limits(session, resolver, r
 
     assert "Agregadas 5" in embed.title
     assert "Mix" in embed.description
-    assert {field.name for field in embed.fields} == {"Cola llena", "Lista recortada"}
+    assert {field.name for field in embed.fields} == {"Cola llena", "Puede estar incompleta"}
 
 
 def test_loop_labels_cover_every_mode():

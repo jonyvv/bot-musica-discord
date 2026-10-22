@@ -83,6 +83,23 @@ En tu PC normalmente no hacen falta. Desde un servidor en la nube, YouTube suele
 
 Las cookies caducan; renovarlas es mantenimiento periódico.
 
+## 6. Tus playlists de Spotify
+
+El bot lee las playlists desde sus páginas públicas, sin credenciales. Eso implica:
+
+1. **La playlist tiene que ser pública.** En Spotify: clic en `⋯` sobre la playlist →
+   **Hacer pública**. Después copiá el link con *Compartir → Copiar enlace a la playlist* y
+   usalo en `/play`. Una playlist privada responde "No encontré ese contenido en Spotify".
+2. **Se leen como máximo las primeras 100 canciones.** Si tu playlist es más larga, faltan las
+   últimas y el bot lo avisa ("Puede estar incompleta"). Una solución simple es dividirla en
+   playlists de hasta 100.
+3. **"Canciones que te gustan" no se puede usar**: Spotify no la deja compartir por link.
+   Copiá esas canciones a una playlist normal.
+
+Si necesitás playlists privadas o de más de 100 canciones, hace falta leerlas con la API de
+Spotify iniciando sesión con tu cuenta. Es más trabajo y tiene sus condiciones: Spotify exige
+que el dueño de la app tenga Premium, y habría que guardar un token de tu cuenta.
+
 ## Problemas frecuentes
 
 | Síntoma | Causa probable |
