@@ -7,12 +7,11 @@ import sys
 import discord
 import httpx
 
-from bot.config import Settings
 from bot.domain.errors import BotError
 from bot.domain.models import Track
 from bot.infrastructure.ffmpeg import before_options
 from bot.infrastructure.resolver_client import HttpTrackResolver
-from bot.main import resolver_headers
+from bot.main import load_settings, resolver_headers
 
 FRAME_SECONDS = 0.02
 DEFAULT_QUERY = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
@@ -33,7 +32,7 @@ async def decode(resolver: HttpTrackResolver, track: Track, seconds: float) -> f
 
 async def check(query: str, seconds: float, limit: int) -> list[bool]:
     """Prueba las primeras `limit` canciones de la consulta e imprime el resultado de cada una."""
-    settings = Settings()
+    settings = load_settings(require_token=False)
     results = []
     async with httpx.AsyncClient(
         base_url=settings.resolver_url, timeout=120, headers=resolver_headers(settings)

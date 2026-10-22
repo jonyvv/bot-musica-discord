@@ -92,16 +92,38 @@ Todo por variables de entorno (ver `.env.example`).
 
 | Variable | Servicio | Default | |
 |---|---|---|---|
-| `DISCORD_TOKEN` | bot | — | Obligatoria. Se modela como `SecretStr` |
-| `DISCORD_GUILD_ID` | bot | — | Con esto los comandos aparecen al instante |
+| `DISCORD_TOKEN` | bot | — | Obligatoria. `SecretStr`; se lee del Administrador de credenciales (local) o de `/run/secrets/discord_token` (Docker), no del `.env` |
+| `DISCORD_GUILD_ID` / `ALLOWED_GUILD_IDS` | bot | — | El primero registra los comandos al instante; ambos definen dónde opera el bot, que se retira del resto |
 | `IDLE_TIMEOUT` / `PAUSE_TIMEOUT` / `EMPTY_TIMEOUT` | bot | 300 / 600 / 120 | Segundos; 0 desactiva |
 | `DEFAULT_VOLUME` / `MAX_QUEUE_SIZE` | bot | 50 / 1000 | |
+| `MAX_TRACKS_PER_USER` / `MAX_INFLIGHT_REQUESTS` | bot | 200 / 3 | Tope de canciones encoladas por usuario y de resoluciones simultáneas |
 | `RESOLVER_URL` | bot | `http://127.0.0.1:8080` | |
-| `MAX_PLAYLIST_SIZE` | resolver | 500 | |
+| `RESOLVER_API_KEY` | bot | — | Clave hacia el resolver (`SecretStr`, también desde `/run/secrets/resolver_api_key`) |
+| `RESOLVER_API_KEY_SHA256` | resolver | — | Solo el hash de la clave; la comparación es en tiempo constante |
+| `MAX_PLAYLIST_SIZE` / `MAX_TRACK_SECONDS` | resolver | 500 / 10800 | Lo que supera el límite de duración o es una transmisión en vivo se rechaza |
 | `YTDLP_JS_RUNTIME` | resolver | `deno` | `node` en local |
-| `YTDLP_PLAYER_CLIENT` / `YTDLP_FORCE_IPV4` | resolver | — / `true` | Mitigación anti-bot |
+| `YTDLP_PLAYER_CLIENT` / `YTDLP_FORCE_IPV4` | resolver | `tv_simply,web_embedded` / `true` | Clientes de YouTube probados en orden; cada URL se verifica como lo haría FFmpeg |
 | `YOUTUBE_COOKIES_FILE` | resolver | — | Se ignora (con aviso) si el archivo no existe |
-| `YTDLP_AUTO_UPDATE` | resolver | `false` | En Docker: se reinicia al salir una versión nueva |
+| `YTDLP_AUTO_UPDATE` / `YTDLP_UPDATE_INTERVAL_HOURS` | resolver | `false` / 24 | En Docker: se reinicia al salir una versión nueva |
+| `YTDLP_MAX_CONCURRENT` / `YTDLP_MIN_INTERVAL_SECONDS` | resolver | 3 / 0,3 | Espaciado de consultas a YouTube |
+| `YOUTUBE_BLOCK_THRESHOLD` / `YOUTUBE_BLOCK_COOLDOWN_SECONDS` | resolver | 3 / 600 | Cortacircuito ante detección de bot |
+| `CACHE_TTL_SECONDS` | resolver | 600 | Caché con consulta única |
+| `RATE_LIMIT_PER_MINUTE` / `MAX_CLIENT_CONCURRENCY` | resolver | 120 / 16 | Por cliente; 0 desactiva |
+| `MAX_BODY_BYTES` / `BODY_TIMEOUT_SECONDS` | resolver | 65536 / 10 | |
+| `HEADER_TIMEOUT_SECONDS` / `MAX_CONNECTIONS_PER_CLIENT` | resolver | 10 / 32 | Defensa contra Slowloris |
+| `AUTH_FAILURE_LIMIT` / `AUTH_FAILURE_WINDOW_SECONDS` | resolver | 5 / 300 | Bloqueo por claves inválidas |
+
+### Módulos de seguridad
+
+| Módulo | Qué hace |
+|---|---|
+| `bot/infrastructure/secret_store.py` | Lee el token del Administrador de credenciales de Windows |
+| `bot/presentation/guards.py`, `limits.py`, `permissions.py` | Lista permitida, cooldowns por usuario y servidor, auditoría de permisos |
+| `bot/domain/text.py` | Limpieza y escape de texto externo |
+| `bot/infrastructure/ffmpeg.py` | Whitelist de protocolos y verificación de la URL de audio |
+| `resolver/presentation/auth.py`, `security.py`, `body_limit.py`, `inflight_limit.py`, `slow_clients.py` | Autenticación, límites de tasa/cuerpo/concurrencia y defensa contra conexiones lentas |
+| `resolver/infrastructure/protection.py`, `pacing.py` | Caché con consulta única, espaciado y cortacircuito |
+| `resolver/infrastructure/log_redaction.py` | Elimina secretos y saltos de línea de los logs |
 
 ## Cambios respecto de los requisitos (`01-requisitos.md`)
 
