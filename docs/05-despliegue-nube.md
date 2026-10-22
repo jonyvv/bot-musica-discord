@@ -65,7 +65,9 @@ Esta es la primera capa de firewall; la del host es la segunda.
 
 ### 3. Instancia
 
-- Forma `VM.Standard.A1.Flex`, 1 OCPU y 6 GB, imagen **Ubuntu 24.04**.
+- Forma `VM.Standard.A1.Flex`, 1 OCPU y 3 GB, imagen **Ubuntu 24.04**. Oracle da hasta 2 OCPU y 12 GB
+  en total, pero con poca memoria el uso supera el 20 % y la instancia no se considera inactiva (ver
+  *Reclamo por inactividad*).
 - Clave SSH `ed25519` generada en tu PC (`ssh-keygen -t ed25519`). **La clave privada nunca va al
   repositorio**: el `.gitignore` ya excluye `*.pem`, `*.key`, `id_*` y `.ssh/`.
 
@@ -128,8 +130,24 @@ correr el bot en tu PC cuando lo vayan a usar.
 | Dependencias | Dependabot abre PRs semanales (Python, Docker y Actions); CI las valida |
 | Cookies | Caducan: renovarlas es mantenimiento periódico |
 
-Si Oracle reclama la instancia por inactividad, el despliegue se reconstruye con los pasos 3 a 6 (no
-hay estado que respaldar salvo el token, que se regenera en el portal).
+### Reclamo por inactividad
+
+Según la documentación de Oracle, una instancia Always Free se considera inactiva, y puede ser
+reclamada, si durante 7 días el CPU (percentil 95) y la red están bajo el 20 %, y en las ARM también la
+memoria. Un bot de música ocioso cumple lo primero. Por eso la instancia ARM lleva poca memoria: así el
+uso supera el 20 %. Es una mitigación, no una garantía; mirá las métricas de la instancia tras unos días.
+
+Si Oracle la reclama, el despliegue se reconstruye con los pasos 3 a 6 (no hay estado que respaldar
+salvo el token, que se regenera en el portal).
+
+## Alternativas evaluadas (octubre de 2026)
+
+| Plataforma | Resultado |
+|---|---|
+| Fly.io | Sin capa gratuita para cuentas nuevas y con tarjeta obligatoria tras la prueba (7 días). Dos máquinas de 512 MB salen unos 7 a 10 USD al mes (estimación). Sus secretos son variables de entorno, lo que debilita la protección del token |
+| Koyeb | Sin plan gratuito confirmado. Aunque exista una instancia gratis, es un solo servicio web que se apaga sin tráfico HTTP y no puede ser *worker*: un bot de Discord se dormiría |
+
+En cualquiera de las tres, YouTube puede bloquear la IP del datacenter (paso 7).
 
 ## Si algo se filtra
 
