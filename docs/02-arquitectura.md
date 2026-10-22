@@ -62,8 +62,10 @@ stream de la primera y la reproduce.
 
 **El audio se resuelve recién al reproducir**, no al encolar. Las URLs de YouTube vencen a
 las ~6 h y resolver 500 canciones juntas sería lento. Las canciones de Spotify se buscan en
-YouTube en ese momento: se elige el resultado cuya duración difiere ≤ 15 s de la de Spotify,
-evitando remixes, covers y versiones en vivo.
+YouTube en ese momento. Entre los 5 primeros resultados se descartan los que difieren más de
+15 s de la duración de Spotify y se prefiere, en este orden: sin marcas de versión alternativa
+(remix, cover, parodia, instrumental, en vivo…), subido por el canal del artista pedido, y el
+mejor posicionado en la búsqueda (diferencias de duración de hasta 5 s se consideran iguales).
 
 **Fin de canción** — discord.py avisa desde el hilo de audio; el adaptador devuelve el aviso
 al event loop y la sesión avanza la cola.
