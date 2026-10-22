@@ -17,6 +17,8 @@ class SecurityPolicy:
     max_body_bytes: int = 65_536
     auth_failure_limit: int = 5
     auth_failure_window_seconds: int = 300
+    max_client_concurrency: int = 16
+    body_timeout_seconds: float = 10.0
 
 
 class SlidingWindowLimiter:

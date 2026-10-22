@@ -114,7 +114,10 @@ async def run() -> None:
     ensure_ffmpeg()
     http_timeout = httpx.Timeout(120, connect=5)
     async with httpx.AsyncClient(
-        base_url=settings.resolver_url, timeout=http_timeout, headers=resolver_headers(settings)
+        base_url=settings.resolver_url,
+        timeout=http_timeout,
+        headers=resolver_headers(settings),
+        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     ) as http:
         bot = build_bot(settings, http)
         async with bot:

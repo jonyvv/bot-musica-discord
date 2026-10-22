@@ -16,6 +16,7 @@ from resolver.infrastructure.updater import YtDlpUpdater
 from resolver.infrastructure.ytdlp_extractor import YtDlpExtractor, YtDlpOptions
 from resolver.presentation.api import create_app
 from resolver.presentation.security import SecurityPolicy
+from resolver.presentation.slow_clients import guarded_protocol
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 )
-_MAX_SERVER_CONNECTIONS = 64
+_MAX_SERVER_CONNECTIONS = 256
 _KEEP_ALIVE_SECONDS = 5
 
 
@@ -81,6 +82,8 @@ def _build_policy(settings: Settings) -> SecurityPolicy:
         api_key_sha256=settings.resolver_api_key_sha256,
         requests_per_minute=settings.rate_limit_per_minute,
         max_body_bytes=settings.max_body_bytes,
+        max_client_concurrency=settings.max_client_concurrency,
+        body_timeout_seconds=settings.body_timeout_seconds,
         auth_failure_limit=settings.auth_failure_limit,
         auth_failure_window_seconds=settings.auth_failure_window_seconds,
     )
@@ -105,6 +108,8 @@ def run() -> None:
         log_level=settings.log_level.lower(),
         limit_concurrency=_MAX_SERVER_CONNECTIONS,
         timeout_keep_alive=_KEEP_ALIVE_SECONDS,
+        server_header=False,
+        http=guarded_protocol(settings.header_timeout_seconds, settings.max_connections_per_client),
     )
 
 

@@ -5,12 +5,14 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from resolver.application.service import ResolverService
 from resolver.domain.errors import BotDetectedError, RateLimitedError, ResolverError
 from resolver.presentation.auth import verify_api_key
 from resolver.presentation.body_limit import BodySizeLimitMiddleware
+from resolver.presentation.inflight_limit import InflightLimitMiddleware
 from resolver.presentation.schemas import (
     ErrorSchema,
     ResolutionSchema,
@@ -77,6 +79,15 @@ def handle_resolver_error(_: Request, exc: ResolverError) -> JSONResponse:
     return JSONResponse(status_code=status, content=content, headers=headers)
 
 
+def handle_validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+    """Responde 422 con los campos que fallaron, sin repetir nunca lo que mandó el cliente."""
+    fields = sorted(
+        {".".join(str(part) for part in error["loc"][1:]) or "cuerpo" for error in exc.errors()}
+    )
+    content = {"code": "invalid_request", "message": "Pedido inválido.", "fields": fields}
+    return JSONResponse(status_code=422, content=content)
+
+
 def create_app(
     service: ResolverService,
     on_shutdown: Callable[[], Awaitable[None]] | None = None,
@@ -107,9 +118,15 @@ def create_app(
     app.state.auth_failures = SlidingWindowLimiter(
         policy.auth_failure_limit, policy.auth_failure_window_seconds
     )
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=policy.max_body_bytes)
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=policy.max_body_bytes,
+        body_timeout=policy.body_timeout_seconds,
+    )
+    app.add_middleware(InflightLimitMiddleware, per_client=policy.max_client_concurrency)
     app.include_router(router)
     app.add_exception_handler(ResolverError, handle_resolver_error)
+    app.add_exception_handler(RequestValidationError, handle_validation_error)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

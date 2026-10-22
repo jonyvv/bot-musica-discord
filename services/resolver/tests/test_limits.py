@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import time
 from typing import ClassVar
@@ -12,10 +13,16 @@ from resolver.domain.policy import exceeds_limits
 from resolver.infrastructure.ytdlp_extractor import YtDlpExtractor, YtDlpOptions
 from resolver.presentation.api import create_app
 from resolver.presentation.auth import hash_api_key
+from resolver.presentation.inflight_limit import InflightLimitMiddleware
 from resolver.presentation.security import SecurityPolicy, SlidingWindowLimiter
 
 KEY = "clave-de-prueba-larga-y-aleatoria"
 URL = "https://www.youtube.com/watch?v=abcdefghijk"
+MEDIA = "https://rr1---sn-abc.googlevideo.com/videoplayback?id=1"
+
+
+async def always_playable(stream):
+    return True
 
 
 class FakeClock:
@@ -231,9 +238,9 @@ class FakeYoutubeDL:
 @pytest.mark.parametrize(
     "info",
     [
-        {"url": "https://a", "duration": 99_999},
-        {"url": "https://a", "is_live": True},
-        {"url": "https://a", "live_status": "is_live"},
+        {"url": MEDIA, "duration": 99_999},
+        {"url": MEDIA, "is_live": True},
+        {"url": MEDIA, "live_status": "is_live"},
     ],
 )
 async def test_stream_refuses_infinite_or_overlong_audio_even_when_the_listing_hid_it(
@@ -247,12 +254,12 @@ async def test_stream_refuses_infinite_or_overlong_audio_even_when_the_listing_h
 
 
 async def test_stream_accepts_normal_audio(monkeypatch):
-    FakeYoutubeDL.info = {"url": "https://a", "duration": 200, "http_headers": {}}
+    FakeYoutubeDL.info = {"url": MEDIA, "duration": 200, "http_headers": {}}
     monkeypatch.setattr("resolver.infrastructure.ytdlp_extractor.YoutubeDL", FakeYoutubeDL)
 
-    stream = await YtDlpExtractor(YtDlpOptions()).stream(URL)
+    stream = await YtDlpExtractor(YtDlpOptions(), probe=always_playable).stream(URL)
 
-    assert stream.url == "https://a"
+    assert stream.url == MEDIA
 
 
 def test_hostile_regex_inputs_do_not_cause_catastrophic_backtracking():
@@ -268,3 +275,115 @@ def test_hostile_regex_inputs_do_not_cause_catastrophic_backtracking():
             classify(text)
 
     assert time.perf_counter() - started < 5
+
+
+class Gate:
+    def __init__(self):
+        self.release = asyncio.Event()
+        self.running = 0
+        self.peak = 0
+
+    async def app(self, scope, receive, send):
+        if scope["path"] != "/health":
+            self.running += 1
+            self.peak = max(self.peak, self.running)
+            try:
+                await self.release.wait()
+            finally:
+                self.running -= 1
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+
+class Collector:
+    def __init__(self):
+        self.messages = []
+
+    async def __call__(self, message):
+        self.messages.append(message)
+
+    @property
+    def status(self):
+        return self.messages[0]["status"]
+
+
+def scope_for(client, path="/v1/resolve"):
+    return {"type": "http", "path": path, "client": (client, 5555), "headers": []}
+
+
+async def call(middleware, client, path="/v1/resolve"):
+    out = Collector()
+    await middleware(scope_for(client, path), None, out)
+    return out
+
+
+async def test_one_client_cannot_hold_more_than_its_share_of_concurrent_requests():
+    gate = Gate()
+    middleware = InflightLimitMiddleware(gate.app, per_client=4)
+    tasks = [asyncio.create_task(call(middleware, "atacante")) for _ in range(40)]
+    await asyncio.sleep(0.05)
+
+    rejected = [t.result() for t in tasks if t.done()]
+    gate.release.set()
+    served = [t for t in tasks if t not in {t for t in tasks if t.done()}]
+    await asyncio.gather(*tasks)
+
+    assert gate.peak == 4
+    assert len(rejected) == 36
+    assert all(r.status == 429 for r in rejected)
+    assert len(served) == 4
+
+
+async def test_a_flooding_client_does_not_take_slots_from_a_legitimate_one():
+    gate = Gate()
+    middleware = InflightLimitMiddleware(gate.app, per_client=4)
+    flood = [asyncio.create_task(call(middleware, "atacante")) for _ in range(100)]
+    await asyncio.sleep(0.02)
+    legit = asyncio.create_task(call(middleware, "bot"))
+    await asyncio.sleep(0.02)
+
+    assert not legit.done()
+    gate.release.set()
+    assert (await legit).status == 200
+    await asyncio.gather(*flood)
+
+
+async def test_slots_are_returned_when_requests_finish_or_fail():
+    async def failing(scope, receive, send):
+        raise RuntimeError("boom")
+
+    middleware = InflightLimitMiddleware(failing, per_client=1)
+
+    for _ in range(5):
+        with pytest.raises(RuntimeError):
+            await call(middleware, "x")
+
+    assert middleware._active == {}
+
+
+async def test_health_checks_are_never_throttled():
+    gate = Gate()
+    gate.release.set()
+    middleware = InflightLimitMiddleware(gate.app, per_client=1)
+    blocker = Gate()
+    holder = InflightLimitMiddleware(blocker.app, per_client=1)
+    task = asyncio.create_task(call(holder, "c"))
+    await asyncio.sleep(0.01)
+
+    result = await call(holder, "c", "/health")
+
+    blocker.release.set()
+    await task
+    assert result.status == 200
+    assert middleware.per_client == 1
+
+
+async def test_zero_disables_the_limit():
+    gate = Gate()
+    middleware = InflightLimitMiddleware(gate.app, per_client=0)
+    tasks = [asyncio.create_task(call(middleware, "x")) for _ in range(30)]
+    await asyncio.sleep(0.02)
+    gate.release.set()
+    await asyncio.gather(*tasks)
+
+    assert gate.peak == 30

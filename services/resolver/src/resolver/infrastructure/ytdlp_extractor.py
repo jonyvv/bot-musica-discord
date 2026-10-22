@@ -1,16 +1,22 @@
 import asyncio
 import logging
 import os
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError
 
-from resolver.domain.errors import TrackNotFoundError, TrackUnavailableError
+from resolver.domain.errors import (
+    BotDetectedError,
+    ResolverError,
+    TrackNotFoundError,
+    TrackUnavailableError,
+)
 from resolver.domain.models import CollectionKind, Resolution, Source, StreamInfo, Track
 from resolver.domain.policy import exceeds_limits
 from resolver.infrastructure.ytdlp_errors import translate_error
@@ -20,6 +26,10 @@ logger = logging.getLogger(__name__)
 AUDIO_FORMAT = "bestaudio[abr<=80]/bestaudio/best"
 _HIDDEN_TITLES = {"[Private video]", "[Deleted video]"}
 _WATCH_URL = "https://www.youtube.com/watch?v={}"
+_TRUSTED_MEDIA_HOSTS = (".googlevideo.com", ".youtube.com")
+_PLAYABLE_STATUS = (200, 206)
+
+Probe = Callable[[StreamInfo], Awaitable[bool]]
 
 
 class _SilentLogger:
@@ -33,6 +43,31 @@ class _SilentLogger:
         """Descarta los errores de yt-dlp, que ya llegan como excepción."""
 
 
+def is_trusted_media_url(url: str) -> bool:
+    """Indica si la URL de audio es https y pertenece a los dominios de medios de YouTube."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    return parsed.scheme == "https" and host.endswith(_TRUSTED_MEDIA_HOSTS)
+
+
+def make_probe(transport: httpx.AsyncBaseTransport | None = None) -> Probe:
+    """Crea la verificación que hace el mismo pedido que FFmpeg y confirma que la URL es legible."""
+
+    async def probe(stream: StreamInfo) -> bool:
+        """Hace un GET con rango abierto, igual al de FFmpeg, y mira solo el código de estado."""
+        headers = {**stream.headers, "Range": "bytes=0-"}
+        try:
+            async with (
+                httpx.AsyncClient(timeout=10, transport=transport) as client,
+                client.stream("GET", stream.url, headers=headers) as response,
+            ):
+                return response.status_code in _PLAYABLE_STATUS
+        except httpx.HTTPError:
+            return False
+
+    return probe
+
+
 @dataclass(frozen=True, slots=True)
 class YtDlpOptions:
     js_runtime: str = "deno"
@@ -43,9 +78,10 @@ class YtDlpOptions:
 
 
 class YtDlpExtractor:
-    def __init__(self, options: YtDlpOptions):
+    def __init__(self, options: YtDlpOptions, probe: Probe | None = None):
         """Adaptador de yt-dlp que ejecuta las extracciones bloqueantes fuera del event loop."""
         self._options = options
+        self._probe = probe or make_probe()
         self._warned_cookies = False
         self._warned_perms = False
 
@@ -73,15 +109,38 @@ class YtDlpExtractor:
         return _entries_to_tracks(info)
 
     async def stream(self, url: str) -> StreamInfo:
-        """Obtiene la URL de audio reproducible de un video, con los headers que exige."""
-        info = await self._extract(url, format=AUDIO_FORMAT)
+        """Obtiene una URL de audio legible, probando cada cliente de YouTube hasta que sirva."""
+        last_error: ResolverError | None = None
+        for client in self._clients():
+            try:
+                info = await self._extract(url, format=AUDIO_FORMAT, **_client_args(client))
+            except BotDetectedError:
+                raise
+            except ResolverError as exc:
+                last_error = exc
+                continue
+            stream = self._to_stream(info, url)
+            if await self._probe(stream):
+                return stream
+            logger.warning("El cliente %s dio una URL que YouTube rechaza; se prueba otro", client)
+        raise last_error or TrackUnavailableError(
+            "No encontré un formato de audio que YouTube permita reproducir."
+        )
+
+    def _clients(self) -> list[str]:
+        """Clientes de YouTube a probar, en orden; uno vacío significa el de yt-dlp por defecto."""
+        configured = [c.strip() for c in self._options.player_client.split(",") if c.strip()]
+        return configured or [""]
+
+    def _to_stream(self, info: Mapping[str, Any], url: str) -> StreamInfo:
+        """Aplica las reglas de duración y de dominio y arma el stream a partir del resultado."""
         live = bool(info.get("is_live")) or info.get("live_status") == "is_live"
         if exceeds_limits(_as_int(info.get("duration")), live, self._options.max_track_seconds):
             raise TrackUnavailableError(
                 "Ese video es demasiado largo o es una transmisión en vivo."
             )
         stream_url = info.get("url")
-        if not stream_url:
+        if not stream_url or not is_trusted_media_url(stream_url):
             raise TrackUnavailableError("No encontré un formato de audio reproducible.")
         return StreamInfo(
             url=stream_url,
@@ -162,6 +221,13 @@ class YtDlpExtractor:
 def is_shared(mode: int) -> bool:
     """Indica si los permisos de un archivo dan acceso al grupo o a otros usuarios."""
     return bool(mode & 0o077)
+
+
+def _client_args(client: str) -> dict[str, Any]:
+    """Parámetros de yt-dlp para usar un único cliente de YouTube."""
+    if not client:
+        return {}
+    return {"extractor_args": {"youtube": {"player_client": [client]}}}
 
 
 def _as_int(value: Any) -> int | None:

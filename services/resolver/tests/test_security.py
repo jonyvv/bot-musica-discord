@@ -18,6 +18,7 @@ from resolver.presentation.auth import hash_api_key
 from resolver.presentation.security import SecurityPolicy
 
 KEY = "clave-de-prueba-larga-y-aleatoria"
+FAKE_TOKEN = "M" + "A" * 23 + "." + "GabcDe" + "." + "x" * 27
 TRACK = {
     "title": "T",
     "source": "youtube",
@@ -217,10 +218,7 @@ def test_oversized_fields_are_rejected(secured):
         ("203.0.113.9", "https://r1.googlevideo.com/videoplayback?id=2&ip=203.0.113.9&itag=1"),
         ("SESSIONVALUE", "Cookie: SID=SESSIONVALUE; HSID=otro"),
         ("secret-account", "cookies file not found: /data/cookies/secret-account.txt"),
-        (
-            "".join(["M", "A" * 23, ".", "GabcDe", ".", "x" * 27]),
-            "token " + "".join(["M", "A" * 23, ".", "GabcDe", ".", "x" * 27]) + " fin",
-        ),
+        (FAKE_TOKEN, f"token {FAKE_TOKEN} fin"),
     ],
 )
 def test_redaction_hides_sensitive_values(secret, text):
@@ -249,3 +247,37 @@ def test_filter_redacts_formatted_log_records():
 )
 def test_is_shared_detects_group_and_world_access(mode, shared):
     assert is_shared(mode) is shared
+
+
+@pytest.mark.parametrize("body", [b'{"query": "\ud800"}', b'{"query": "a\udfffb"}'])
+def test_invalid_unicode_gets_a_clean_422_instead_of_crashing_the_response(secured, body):
+    response = secured.post(
+        "/v1/resolve", content=body, headers={**bearer(KEY), "Content-Type": "application/json"}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_request"
+    assert "ud800" not in response.text
+
+
+def test_invalid_unicode_in_a_track_is_rejected_cleanly(secured):
+    body = b'{"title": "ok\\ud800", "source": "youtube"}'
+
+    response = secured.post(
+        "/v1/stream", content=body, headers={**bearer(KEY), "Content-Type": "application/json"}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_request"
+
+
+def test_validation_errors_never_echo_what_the_client_sent(secured):
+    secret = "valor-que-no-debe-volver"
+
+    response = secured.post(
+        "/v1/stream", json={"title": secret, "source": "no-existe"}, headers=bearer(KEY)
+    )
+
+    assert response.status_code == 422
+    assert secret not in response.text
+    assert "source" in response.json()["fields"]
