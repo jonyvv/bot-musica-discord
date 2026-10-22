@@ -114,6 +114,7 @@ def enqueued_embed(result: EnqueueResult) -> discord.Embed:
         )
     if resolution.truncated:
         embed.add_field(
-            name="Lista recortada", value="La lista era más larga que el máximo permitido."
+            name="Puede estar incompleta",
+            value="Hay un máximo de canciones por lista; si la tuya tiene más, faltan las últimas.",
         )
     return embed

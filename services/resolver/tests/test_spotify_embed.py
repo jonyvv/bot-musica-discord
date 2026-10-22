@@ -74,6 +74,33 @@ async def test_missing_content_is_reported_as_unavailable():
         await respond_with("", status=404).track("abc")
 
 
+async def test_private_playlist_arrives_as_http_200_with_404_inside_the_page():
+    data = {"props": {"pageProps": {"status": 404, "title": "Page not found"}}}
+    script = f'<script id="__NEXT_DATA__" type="application/json">{json.dumps(data)}</script>'
+
+    with pytest.raises(SpotifyUnavailableError) as caught:
+        await respond_with(f"<html>{script}</html>", status=200).playlist("abc", 500)
+
+    assert "pública" in caught.value.message
+
+
+async def test_hitting_the_embed_cap_flags_the_list_as_possibly_incomplete():
+    items = [{"title": f"S{i}", "subtitle": "A", "duration": 1000} for i in range(100)]
+
+    result = await respond_with(page({"name": "Grande", "trackList": items})).playlist("abc", 500)
+
+    assert len(result.tracks) == 100
+    assert result.truncated
+
+
+async def test_list_below_the_cap_is_not_flagged():
+    items = [{"title": f"S{i}", "subtitle": "A", "duration": 1000} for i in range(99)]
+
+    result = await respond_with(page({"name": "Chica", "trackList": items})).playlist("abc", 500)
+
+    assert not result.truncated
+
+
 async def test_changed_page_format_is_reported_as_upstream_error():
     with pytest.raises(UpstreamError):
         await respond_with("<html>nada</html>").track("abc")

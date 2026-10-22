@@ -11,6 +11,11 @@ from resolver.domain.models import CollectionKind, Resolution, Source, Track
 _EMBED_URL = "https://open.spotify.com/embed/{kind}/{ref}"
 _NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S)
 _UNEXPECTED = "Spotify cambió el formato de sus páginas y no pude leer ese link."
+_NOT_FOUND = (
+    "No encontré ese contenido en Spotify. Si es una playlist tuya, tiene que ser pública: "
+    "en Spotify tocá ⋯ y elegí «Hacer pública»."
+)
+EMBED_TRACK_CAP = 100
 
 
 class SpotifyEmbedCatalog:
@@ -50,7 +55,7 @@ class SpotifyEmbedCatalog:
             kind=collection,
             title=entity.get("name") or entity.get("title"),
             tracks=tuple(tracks[:limit]),
-            truncated=len(tracks) > limit,
+            truncated=len(tracks) > limit or len(items) >= EMBED_TRACK_CAP,
         )
 
     async def _entity(self, kind: str, ref: str) -> Mapping[str, Any]:
@@ -60,19 +65,22 @@ class SpotifyEmbedCatalog:
         except httpx.HTTPError as exc:
             raise UpstreamError("No pude conectar con Spotify.") from exc
         if response.status_code == 404:
-            raise SpotifyUnavailableError("Ese contenido de Spotify no existe o no es público.")
+            raise SpotifyUnavailableError(_NOT_FOUND)
         if response.status_code >= 400:
             raise UpstreamError(f"Spotify respondió con un error ({response.status_code}).")
         return _parse_entity(response.text)
 
 
 def _parse_entity(html: str) -> Mapping[str, Any]:
-    """Extrae la entidad del JSON incrustado en la página, o falla si el formato cambió."""
+    """Extrae la entidad del JSON de la página; una lista privada llega como 404 en un 200."""
     match = _NEXT_DATA.search(html)
     if not match:
         raise UpstreamError(_UNEXPECTED)
     try:
-        return json.loads(match[1])["props"]["pageProps"]["state"]["data"]["entity"]
+        page_props = json.loads(match[1])["props"]["pageProps"]
+        if page_props.get("status") == 404:
+            raise SpotifyUnavailableError(_NOT_FOUND)
+        return page_props["state"]["data"]["entity"]
     except (KeyError, TypeError, ValueError) as exc:
         raise UpstreamError(_UNEXPECTED) from exc
 
