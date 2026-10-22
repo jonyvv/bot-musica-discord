@@ -183,3 +183,12 @@ def test_secret_store_without_a_backend_returns_nothing():
         assert secret_store.load_secret("DISCORD_TOKEN") is None
     finally:
         keyring.set_keyring(previous)
+
+
+def test_tools_can_load_settings_without_a_discord_token(monkeypatch):
+    monkeypatch.setattr(main, "load_secret", {"RESOLVER_API_KEY": "clave-del-almacen"}.get)
+
+    settings = main.load_settings(require_token=False)
+
+    assert settings.resolver_api_key.get_secret_value() == "clave-del-almacen"
+    assert settings.discord_token.get_secret_value() == ""

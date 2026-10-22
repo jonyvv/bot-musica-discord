@@ -31,7 +31,7 @@ MISSING_TOKEN_HINT = (
 _STORED_SECRETS = ("discord_token", "resolver_api_key")
 
 
-def load_settings() -> Settings:
+def load_settings(require_token: bool = True) -> Settings:
     """Lee la configuración; los secretos que falten se buscan en el almacén cifrado del sistema."""
     try:
         settings = Settings()
@@ -40,7 +40,7 @@ def load_settings() -> Settings:
         message = f"Configuración inválida o incompleta ({fields}). Revisá el archivo .env."
         raise SystemExit(message) from exc
     settings = _fill_from_secret_store(settings)
-    if not settings.discord_token.get_secret_value():
+    if require_token and not settings.discord_token.get_secret_value():
         raise SystemExit(MISSING_TOKEN_HINT)
     return settings
 
