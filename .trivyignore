@@ -1,0 +1,6 @@
+# Copias vendorizadas dentro de pip 26.2.2 (pip/_vendor/vendor.txt), no dependencias del servicio:
+# el resolver usa urllib3 2.8.0. Quitar estas lineas cuando pip publique una version que las actualice.
+GHSA-6v7p-g79w-8964
+CVE-2025-47273
+CVE-2026-97687
+CVE-2026-97689

@@ -43,13 +43,14 @@ def test_generated_key_goes_to_the_store_and_only_its_hash_to_the_env_file(tmp_p
     env = tmp_path / ".env"
     vault = MemoryStore()
 
-    message = gen_api_key.generate(env, store=vault, make_key=lambda n: "k" * 43)
+    outcome = gen_api_key.generate(env, store=vault, make_key=lambda n: "k" * 43)
 
     key = vault.items["RESOLVER_API_KEY"]
     text = env.read_text()
     assert f"RESOLVER_API_KEY_SHA256={hash_api_key(key)}" in text
     assert key not in text
-    assert key not in message
+    assert outcome is gen_api_key.Outcome.VAULT
+    assert key not in gen_api_key.MESSAGES[outcome]
 
 
 def test_generation_never_overwrites_an_existing_key_without_force(tmp_path):
@@ -58,10 +59,11 @@ def test_generation_never_overwrites_an_existing_key_without_force(tmp_path):
     gen_api_key.generate(env, store=vault)
     before = env.read_text()
 
-    message = gen_api_key.generate(env, store=vault)
+    outcome = gen_api_key.generate(env, store=vault)
 
     assert env.read_text() == before
-    assert "--force" in message
+    assert outcome is gen_api_key.Outcome.EXISTS
+    assert "--force" in gen_api_key.MESSAGES[outcome]
     gen_api_key.generate(env, store=vault, force=True)
     assert env.read_text() != before
 
@@ -69,10 +71,11 @@ def test_generation_never_overwrites_an_existing_key_without_force(tmp_path):
 def test_without_a_secret_store_the_key_falls_back_to_the_env_file_with_a_warning(tmp_path):
     env = tmp_path / ".env"
 
-    message = gen_api_key.generate(env, store=MemoryStore(fail=True), make_key=lambda n: "z" * 43)
+    outcome = gen_api_key.generate(env, store=MemoryStore(fail=True), make_key=lambda n: "z" * 43)
 
     assert "RESOLVER_API_KEY=" + "z" * 43 in env.read_text()
-    assert "Protegé" in message
+    assert outcome is gen_api_key.Outcome.ENV_FALLBACK
+    assert "Protegé" in gen_api_key.MESSAGES[outcome]
 
 
 def test_secret_files_for_docker_are_created_private(tmp_path):
