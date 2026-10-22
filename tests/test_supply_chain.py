@@ -84,3 +84,16 @@ def test_compose_publishes_no_ports_and_uses_secret_files():
     assert not re.search(r"^\s+ports:", text, re.M)
     assert "secrets:" in text
     assert "DISCORD_TOKEN:" not in text.replace("DISCORD_GUILD_ID", "")
+
+
+def test_shell_scripts_are_committed_as_executable():
+    import shutil
+    import subprocess
+
+    if not shutil.which("git") or not (ROOT / ".git").exists():
+        pytest.skip("requiere un checkout de git")
+    listing = subprocess.run(
+        ["git", "ls-files", "-s", "*.sh"], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    not_executable = [line.split("\t")[1] for line in listing if not line.startswith("100755")]
+    assert not_executable == []

@@ -249,7 +249,7 @@ def test_is_shared_detects_group_and_world_access(mode, shared):
     assert is_shared(mode) is shared
 
 
-@pytest.mark.parametrize("body", [b'{"query": "\ud800"}', b'{"query": "a\udfffb"}'])
+@pytest.mark.parametrize("body", [rb'{"query": "\ud800"}', rb'{"query": "a\udfffb"}'])
 def test_invalid_unicode_gets_a_clean_422_instead_of_crashing_the_response(secured, body):
     response = secured.post(
         "/v1/resolve", content=body, headers={**bearer(KEY), "Content-Type": "application/json"}
