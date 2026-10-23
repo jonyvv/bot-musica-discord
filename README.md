@@ -34,10 +34,26 @@ Discord ◄──► bot ──HTTP + clave──► resolver ──► YouTube 
 - **`services/resolver`**: convierte links/búsquedas en canciones y obtiene el audio. Está
   aparte porque `yt-dlp` hay que actualizarlo seguido, y porque concentra las cookies de YouTube.
 
+## Instalarlo en tu servidor de Discord
+
+1. En <https://discord.com/developers/applications> crea una **New Application**, y en la pestaña **Bot**
+   usa **Reset Token** para copiar el token (se muestra una sola vez). Desactiva **Public Bot** y no
+   actives ningún *Privileged Gateway Intent*.
+2. Copia el **Application ID** (*General Information*) e invita el bot con este link, cambiando `APP_ID`:
+
+   ```
+   https://discord.com/oauth2/authorize?client_id=APP_ID&scope=bot%20applications.commands&permissions=3164160
+   ```
+
+   Esos permisos son solo conectar, hablar, enviar mensajes e insertar enlaces. Nunca des `Administrator`.
+3. En Discord activa el *Modo desarrollador* (Ajustes → Avanzado), clic derecho en tu servidor →
+   **Copiar ID**, y ponlo como `DISCORD_GUILD_ID` en `.env`. El bot solo opera en ese servidor.
+4. Guarda el token con `.\scripts\dev.ps1 token` (queda cifrado, no va en `.env`) y arranca el bot
+   como se explica abajo. Entra a un canal de voz y escribe `/play`.
+
 ## Puesta en marcha
 
-Guía completa, incluida la creación de la app de Discord, en [docs/03-setup.md](docs/03-setup.md).
-Resumen en Windows:
+Guía completa en [docs/03-setup.md](docs/03-setup.md). Resumen en Windows:
 
 ```powershell
 .\scripts\dev.ps1 setup      # entorno, dependencias y .env (sin secretos)
