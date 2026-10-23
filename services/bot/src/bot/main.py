@@ -28,6 +28,11 @@ MISSING_TOKEN_HINT = (
     "Falta el token de Discord. Guardalo con: .\\scripts\\dev.ps1 token "
     "(o definí DISCORD_TOKEN como variable de entorno o secreto de Docker)."
 )
+GUILD_ACCESS_HINT = (
+    "Discord dice que el bot no tiene acceso al servidor de DISCORD_GUILD_ID. Invitalo con el "
+    "link de OAuth2 (permisos bot y applications.commands) y verificá que el ID sea el "
+    "del servidor."
+)
 _STORED_SECRETS = ("discord_token", "resolver_api_key")
 
 
@@ -125,6 +130,8 @@ async def run() -> None:
                 await bot.start(settings.discord_token.get_secret_value())
             except discord.LoginFailure as exc:
                 raise SystemExit(TOKEN_HINT) from exc
+            except discord.Forbidden as exc:
+                raise SystemExit(GUILD_ACCESS_HINT) from exc
 
 
 def main() -> None:
