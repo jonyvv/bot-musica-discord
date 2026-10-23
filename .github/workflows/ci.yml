@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COMPOSE_PROJECT_NAME: bot-musica-discord
+
+jobs:
+  test:
+    name: Lint y tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest
+
+  audit:
+    name: Vulnerabilidades en dependencias
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dev.txt
+      - run: pip-audit --skip-editable
+
+  images:
+    name: Imágenes, endurecimiento y ataques
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Crear secretos de prueba
+        run: |
+          fake="N$(head -c 40 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 23).$(head -c 20 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 6).$(head -c 60 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 30)"
+          printf '%s\n' "$fake" | ./deploy/create-secrets.sh
+          echo "DISCORD_GUILD_ID=111111111111111111" > .env
+          mkdir -p data/cookies
+          sudo chown 10001 data/cookies
+
+      - name: Construir las imágenes
+        run: docker compose build
+
+      - name: Levantar el resolver
+        run: |
+          docker compose up -d resolver
+          for _ in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' "${COMPOSE_PROJECT_NAME}-resolver-1")" = healthy ] && exit 0
+            sleep 2
+          done
+          docker compose logs resolver
+          exit 1
+
+      - name: Dependencias de voz del bot
+        run: |
+          docker compose run --rm --no-deps --entrypoint python bot -c "
+          import davey, nacl, discord
+          from discord import voice_client
+          import ctypes.util
+          assert voice_client.has_nacl, 'discord.py no detecta PyNaCl'
+          assert ctypes.util.find_library('opus'), 'falta libopus'
+          print('voz OK: davey', davey.__version__, '| PyNaCl', nacl.__version__)"
+          docker compose run --rm --no-deps --entrypoint ffmpeg bot -version | head -1
+
+      - name: Auditar el endurecimiento de los contenedores
+        run: bash scripts/audit_containers.sh
+
+      - name: Atacar el resolver desplegado
+        run: bash scripts/attack_compose.sh --offline
+
+      - name: Escanear la imagen del resolver
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: bot-musica-discord-resolver
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: "1"
+
+      - name: Escanear la imagen del bot
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: bot-musica-discord-bot
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: "1"
+
+      - name: Logs del resolver si algo falló
+        if: failure()
+        run: docker compose logs --tail 100 resolver

@@ -1,0 +1,85 @@
+x-hardening: &hardening
+  restart: unless-stopped
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 256
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  resolver:
+    <<: *hardening
+    build: ./services/resolver
+    environment:
+      RESOLVER_HOST: 0.0.0.0
+      YTDLP_JS_RUNTIME: deno
+      YTDLP_AUTO_UPDATE: ${YTDLP_AUTO_UPDATE:-true}
+      YOUTUBE_COOKIES_FILE: /data/cookies/cookies.txt
+      MAX_PLAYLIST_SIZE: ${MAX_PLAYLIST_SIZE:-500}
+      MAX_TRACK_SECONDS: ${MAX_TRACK_SECONDS:-10800}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-65536}
+      MAX_CLIENT_CONCURRENCY: ${MAX_CLIENT_CONCURRENCY:-16}
+      HEADER_TIMEOUT_SECONDS: ${HEADER_TIMEOUT_SECONDS:-10}
+      MAX_CONNECTIONS_PER_CLIENT: ${MAX_CONNECTIONS_PER_CLIENT:-32}
+      BODY_TIMEOUT_SECONDS: ${BODY_TIMEOUT_SECONDS:-10}
+      AUTH_FAILURE_LIMIT: ${AUTH_FAILURE_LIMIT:-5}
+      AUTH_FAILURE_WINDOW_SECONDS: ${AUTH_FAILURE_WINDOW_SECONDS:-300}
+      YTDLP_MAX_CONCURRENT: ${YTDLP_MAX_CONCURRENT:-3}
+      YTDLP_MIN_INTERVAL_SECONDS: ${YTDLP_MIN_INTERVAL_SECONDS:-0.3}
+      YOUTUBE_BLOCK_THRESHOLD: ${YOUTUBE_BLOCK_THRESHOLD:-3}
+      YOUTUBE_BLOCK_COOLDOWN_SECONDS: ${YOUTUBE_BLOCK_COOLDOWN_SECONDS:-600}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-600}
+      YTDLP_PLAYER_CLIENT: ${YTDLP_PLAYER_CLIENT:-tv_simply,web_embedded}
+      YTDLP_FORCE_IPV4: ${YTDLP_FORCE_IPV4:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    secrets:
+      - resolver_api_key_sha256
+    volumes:
+      - ./data/cookies:/data/cookies
+    expose:
+      - "8080"
+    mem_limit: 512m
+    cpus: 1.0
+
+  bot:
+    <<: *hardening
+    build: ./services/bot
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    environment:
+      DISCORD_GUILD_ID: "${DISCORD_GUILD_ID:?Definí DISCORD_GUILD_ID en .env (el bot solo debe operar en tu servidor)}"
+      ALLOWED_GUILD_IDS: ${ALLOWED_GUILD_IDS:-}
+      RESOLVER_URL: http://resolver:8080
+      IDLE_TIMEOUT: ${IDLE_TIMEOUT:-300}
+      EMPTY_TIMEOUT: ${EMPTY_TIMEOUT:-120}
+      PAUSE_TIMEOUT: ${PAUSE_TIMEOUT:-600}
+      DEFAULT_VOLUME: ${DEFAULT_VOLUME:-50}
+      MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-1000}
+      MAX_TRACKS_PER_USER: ${MAX_TRACKS_PER_USER:-200}
+      MAX_INFLIGHT_REQUESTS: ${MAX_INFLIGHT_REQUESTS:-3}
+      USER_COMMANDS_PER_10S: ${USER_COMMANDS_PER_10S:-8}
+      GUILD_COMMANDS_PER_10S: ${GUILD_COMMANDS_PER_10S:-30}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    secrets:
+      - discord_token
+      - resolver_api_key
+    depends_on:
+      resolver:
+        condition: service_healthy
+    mem_limit: 384m
+    cpus: 1.0
+
+secrets:
+  discord_token:
+    file: ./secrets/discord_token
+  resolver_api_key:
+    file: ./secrets/resolver_api_key
+  resolver_api_key_sha256:
+    file: ./secrets/resolver_api_key_sha256
