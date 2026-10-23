@@ -169,3 +169,9 @@ def session(resolver, voice, notifier, observer, closed_guilds):
         activity_factory=lambda close: observer,
         on_closed=closed_guilds.append,
     )
+
+
+@pytest.fixture(autouse=True)
+def isolated_secret_store(monkeypatch):
+    """Evita que los tests lean secretos guardados de verdad en el almacén del sistema."""
+    monkeypatch.setattr("bot.main.load_secret", lambda name: None)
