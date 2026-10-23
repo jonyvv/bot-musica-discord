@@ -89,9 +89,8 @@ EOF
 }
 
 authorized_keys_present() {
-  local home file
-  for home in /root "/home/${SUDO_USER:-}" /home/ubuntu; do
-    file="${root}${home}/.ssh/authorized_keys"
+  local file
+  for file in "${root}"/home/*/.ssh/authorized_keys; do
     if [ -s "$file" ]; then
       return 0
     fi
@@ -102,8 +101,9 @@ authorized_keys_present() {
 step_ssh() {
   echo "== SSH: solo claves, sin root =="
   if [ "$dry_run" -eq 0 ] && ! authorized_keys_present; then
-    echo "No hay ninguna clave en authorized_keys: desactivar las contrasenas te dejaria afuera." >&2
-    echo "Agrega tu clave publica primero y volve a ejecutar este paso." >&2
+    echo "Ningun usuario normal (no root) tiene una clave en authorized_keys: como se desactiva el" >&2
+    echo "acceso de root y de contrasenas, quedarias afuera. Crea un usuario con tu clave publica" >&2
+    echo "y volve a ejecutar este paso desde ese usuario con sudo." >&2
     exit 1
   fi
   write_file /etc/ssh/sshd_config.d/99-hardening.conf 644 <<'EOF'
