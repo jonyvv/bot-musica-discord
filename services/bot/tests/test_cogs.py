@@ -345,3 +345,27 @@ async def test_rejected_token_exits_with_actionable_message(monkeypatch):
 
     assert str(caught.value) == main.TOKEN_HINT
     assert "malo" not in str(caught.value)
+
+
+async def test_missing_access_to_the_guild_exits_with_actionable_message(monkeypatch):
+    from types import SimpleNamespace
+
+    import discord
+
+    from bot import main
+
+    monkeypatch.setenv("DISCORD_TOKEN", "valido")
+    monkeypatch.chdir("/")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/ffmpeg")
+    response = SimpleNamespace(status=403, reason="Forbidden")
+
+    async def forbid(self, token):
+        raise discord.Forbidden(response, {"code": 50001, "message": "Missing Access"})
+
+    monkeypatch.setattr(main.MusicBot, "start", forbid)
+
+    with pytest.raises(SystemExit) as caught:
+        await main.run()
+
+    assert str(caught.value) == main.GUILD_ACCESS_HINT
+    assert "valido" not in str(caught.value)
