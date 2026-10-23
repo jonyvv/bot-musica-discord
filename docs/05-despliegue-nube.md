@@ -73,6 +73,20 @@ Esta es la primera capa de firewall; la del host es la segunda.
 
 ### 4. Endurecer el host
 
+Si el proveedor solo entrega `root` con contraseña (por ejemplo GratisVPS), crea antes un usuario normal con
+tu clave pública. El script desactiva el acceso de root y de contraseñas, y se niega a seguir si ningún
+usuario normal tiene una clave. Desde tu PC: `ssh-keygen -t ed25519`, y en el servidor, como root:
+
+```bash
+adduser --disabled-password --gecos "" bot && usermod -aG sudo bot
+install -d -m 700 -o bot -g bot /home/bot/.ssh
+echo "TU_CLAVE_PUBLICA" > /home/bot/.ssh/authorized_keys
+chown bot:bot /home/bot/.ssh/authorized_keys && chmod 600 /home/bot/.ssh/authorized_keys
+echo "bot ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-bot
+```
+
+Abre otra terminal y comprueba `ssh bot@IP` **antes** de seguir. Después, como `bot`:
+
 ```bash
 git clone https://github.com/jonyvv/bot-musica-discord.git /opt/bot-musica-discord
 cd /opt/bot-musica-discord
