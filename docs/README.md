@@ -10,10 +10,12 @@
 
 ## Estado
 
-La implementación está completa y probada con tests, contra YouTube y Spotify reales y en Docker real.
+La implementación está completa y probada con tests, contra YouTube y Spotify reales, en Docker real y
+en un servidor de Discord real corriendo en Windows (comandos, voz y reproducción).
 
 Pendiente, porque requiere cosas que solo vos tenés:
 
-- La primera ejecución contra un servidor de Discord real (necesita tu token).
-- El despliegue en la VM de Oracle y, antes que nada, comprobar que `yt-dlp` puede bajar audio desde su
-  IP ([05-despliegue-nube.md](05-despliegue-nube.md), paso 7).
+- Desplegarlo en un servidor propio. Hace falta un host con tarjeta (Oracle) o aceptar un VPS gratuito de
+  terceros; antes que nada, comprobar que `yt-dlp` puede bajar audio desde su IP
+  ([05-despliegue-nube.md](05-despliegue-nube.md), paso 7).
+- Probar el bot en Docker contra Discord (hasta ahora solo corrió así el resolver).

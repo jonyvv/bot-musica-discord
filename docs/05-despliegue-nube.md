@@ -39,7 +39,8 @@ venir de un contenedor ya comprometido dentro de la VM. Aun así están cubierto
    requieren un host real con systemd. Están en `--dry-run` y revisados con `shellcheck`.
 3. **Imágenes ARM64.** Se probaron en x86-64. Construilas en la propia VM ARM (`docker compose build`)
    y corré `scripts/audit_containers.sh` y `smoke_playback.py` ahí.
-4. **El bot contra un servidor de Discord real**, que necesita tu token.
+4. **El bot en Docker contra Discord.** Ya se probó contra un servidor real corriendo en Windows (comandos,
+   voz y reproducción), pero no dentro del contenedor ni con UDP saliente desde un servidor en la nube.
 
 ## Pasos
 
