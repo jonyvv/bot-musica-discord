@@ -95,10 +95,10 @@ ningún secreto (`tests/`). CI en GitHub ejecuta todo esto además de CodeQL y T
 
 ## Estado y límites
 
-- Verificado con tests, contra YouTube y Spotify reales, y en **Docker real** (auditoría de
-  contenedores, 78 ataques de prueba y decodificación de audio real). **No se probó contra un
-  servidor de Discord real**: hace falta un token, así que la primera ejecución con audio es la
-  prueba de integración pendiente.
+- Verificado con tests, contra YouTube y Spotify reales, en **Docker real** (auditoría de
+  contenedores, 78 ataques de prueba y decodificación de audio real) y **en un servidor de Discord
+  real, corriendo en Windows** (comandos, voz y reproducción). Corriendo en Docker o en la nube
+  contra Discord todavía no se probó.
 - Las playlists de Spotify tienen que ser **públicas** y se leen hasta **100 canciones** (límite
   medido; el bot avisa si puede faltar alguna). Ver [docs/03-setup.md](docs/03-setup.md).
 - Spotify no entrega audio: cada canción se busca en YouTube al reproducir, así que puede
